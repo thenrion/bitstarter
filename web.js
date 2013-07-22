@@ -7,7 +7,7 @@ app.get('/', function(request, response) {
     var output = '';
     fs.readFile('index.html', function (err, data) {
 	if (err) throw err;
-	output = data;
+	output = new Buffer(data).toString();
     });
     response.send(output);
 });
