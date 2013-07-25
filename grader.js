@@ -22,12 +22,17 @@ References:
 */
 
 var fs = require('fs');
+var util = require('util');
+var rest = require('restler');
 var program = require('commander');
 var cheerio = require('cheerio');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+var URL_DEFAULT = "http://calm-mountain-8389.herokuapp.com";
+var TMP_FILE = "tmp.html";
 
 var assertFileExists = function(infile) {
+    console.log("infile:"+infile);
     var instr = infile.toString();
     if(!fs.existsSync(instr)) {
         console.log("%s does not exist. Exiting.", instr);
@@ -44,8 +49,8 @@ var loadChecks = function(checksfile) {
     return JSON.parse(fs.readFileSync(checksfile));
 };
 
-var checkHtmlFile = function(htmlfile, checksfile) {
-    $ = cheerioHtmlFile(htmlfile);
+var checkHtmlFile = function(htmlContent, checksfile) {
+    $ = cheerioHtmlFile(htmlContent);
     var checks = loadChecks(checksfile).sort();
     var out = {};
     for(var ii in checks) {
@@ -61,14 +66,37 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
+var getHTMLFromURL = function(url, checks) {
+    rest.get(url).on('complete', function(data) {
+	  if (data instanceof Error) {
+	      this.retry(5000); // try again after 5 sec
+	  } else {
+	      fs.writeFileSync(TMP_FILE, data);
+	      console.log(TMP_FILE+" written to disk");
+	      var checkJson = checkHtmlFile(TMP_FILE, checks);
+	      var outJson = JSON.stringify(checkJson, null, 4);
+              console.log(outJson); 
+	  }
+    });
+}
+
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
-        .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
-        .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+        .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists))
+        .option('-u, --url <url>', 'Url to web page', URL_DEFAULT)
+	.parse(process.argv);
+    var checkJson;    
+    if(program.file !== undefined){
+	checkJson = checkHtmlFile(program.file, program.checks);
+	var outJson = JSON.stringify(checkJson, null, 4);
+	console.log(outJson);
+    } else {
+	getHTMLFromURL(program.url, program.checks);
+	//checkJson = checkHtmlFile(TMP_FILE, program.checks);
+    }    
+    //var outJson = JSON.stringify(checkJson, null, 4);
+    //console.log(outJson);
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
